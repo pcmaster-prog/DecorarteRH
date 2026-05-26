@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import Sidebar from './Sidebar'
@@ -13,7 +13,7 @@ function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
-  const isAdmin = user?.role_level >= 60
+  const isAdmin = (user?.role_level ?? 0) >= 60
 
   return (
     <div className="min-h-screen bg-background">

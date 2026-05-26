@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  Clock, ClipboardList, Calendar, Award, UserCircle, Cake,
-  Play, Square, Coffee, ArrowRight
+  Clock, ClipboardList, Calendar, Award, AlertTriangle,
+  Play, Square, Coffee
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'

@@ -1,3 +1,4 @@
+import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
@@ -38,7 +39,7 @@ function App() {
     )
   }
 
-  const isAdmin = user?.role_level >= 60
+  const isAdmin = (user?.role_level ?? 0) >= 60
 
   return (
     <>

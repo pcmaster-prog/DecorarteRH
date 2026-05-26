@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: decorarte-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: decorarte_rh
+      POSTGRES_USER: decorarte
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-decorarte_password_seguro}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/seeders:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decorarte -d decorarte_rh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (para caché y colas)
+  redis:
+    image: redis:7-alpine
+    container_name: decorarte-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+  # Backend Laravel
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    container_name: decorarte-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_DEBUG: false
+      APP_URL: ${APP_URL:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: decorarte_rh
+      DB_USERNAME: decorarte
+      DB_PASSWORD: ${DB_PASSWORD:-decorarte_password_seguro}
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - backend_storage:/var/www/backend/storage
+      - ./backend/.env:/var/www/backend/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: >
+      sh -c "
+        php artisan migrate --force &&
+        php artisan db:seed --force || true &&
+        php artisan config:cache &&
+        php artisan route:cache &&
+        php artisan serve --host=0.0.0.0 --port=8000
+      "
+
+  # Queue Worker
+  queue:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    container_name: decorarte-queue
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: decorarte_rh
+      DB_USERNAME: decorarte
+      DB_PASSWORD: ${DB_PASSWORD:-decorarte_password_seguro}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - db
+      - redis
+    command: php artisan queue:work --sleep=3 --tries=3 --timeout=90
+
+  # Scheduler
+  scheduler:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    container_name: decorarte-scheduler
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: decorarte_rh
+      DB_USERNAME: decorarte
+      DB_PASSWORD: ${DB_PASSWORD:-decorarte_password_seguro}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - db
+      - redis
+    command: php artisan schedule:work
+
+  # Frontend React
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+    container_name: decorarte-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_storage:

@@ -1,0 +1,43 @@
+FROM php:8.3-fpm-alpine
+
+# Instalar dependencias
+RUN apk add --no-cache     postgresql-dev     libzip-dev     zip     unzip     git     curl     nodejs     npm     nginx     supervisor
+
+# Instalar extensiones PHP
+RUN docker-php-ext-install     pdo_pgsql     pgsql     zip     opcache
+
+# Instalar Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Configurar OPcache
+RUN { \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.interned_strings_buffer=8'; \
+    echo 'opcache.max_accelerated_files=4000'; \
+    echo 'opcache.revalidate_freq=2'; \
+    echo 'opcache.fast_shutdown=1'; \
+    echo 'opcache.enable_cli=1'; \
+} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+# Directorio de trabajo
+WORKDIR /var/www/backend
+
+# Copiar composer files primero para cache
+COPY backend/composer.json backend/composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+
+# Copiar el resto del backend
+COPY backend/ .
+
+# Generar key y cache
+RUN php artisan key:generate --force || true
+RUN php artisan config:cache || true
+RUN php artisan route:cache || true
+
+# Permisos
+RUN chown -R www-data:www-data /var/www/backend     && chmod -R 775 /var/www/backend/storage     && chmod -R 775 /var/www/backend/bootstrap/cache
+
+# Puerto
+EXPOSE 8000
+
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
